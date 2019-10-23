@@ -3,12 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import transforms
+from scipy.ndimage import median_filter
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
 import sys
 import cv2
+import time
 
 # create vgg class
 import torchvision.models as models
@@ -78,7 +80,10 @@ for n in range(num_background):
     _, frame = cap.read()
     cv2.imshow('frame', frame)
     frame_tensor = load_and_normalize(frame).unsqueeze(0)
+    start = time.time()
     val = vgg(frame_tensor)
+    elapsed = time.time()-start
+    print(elapsed)
     if n == 0:
         background_model = val[5]
     else:
@@ -103,16 +108,18 @@ for n in range(num_background):
     gradient = torch.abs(frame_tensor.grad).squeeze(0).mean(dim=0).reshape(400,-1)
     # gradient *= 1/gradient.max()
     # gradient *= 255
-    image = gradient.data.numpy()
-    cutoff = np.percentile(image, 90)
-    image = image>cutoff
-    image = image.astype('uint8')
-    image *= 255
-    image = cv2.resize(image, dsize= (1920,1080))
-    cv2.imshow('gradient', image)
-    mask_on_frame = frame // 2 + np.dstack([image // 2] * 3)
-    cv2.imshow('mask', mask_on_frame)
+    mask = gradient.data.numpy()
+    cutoff = np.percentile(mask, 95)
+    mask = mask>cutoff
+    mask = mask.astype('uint8')
+    mask *= 255
+    mask = cv2.resize(mask, dsize= (1920,1080))
+    # do median filter
     pdb.set_trace()
+    mask = median_filter(mask, size=15)
+    cv2.imshow('gradient', mask)
+    mask_on_frame = frame // 2 + np.dstack([mask // 2] * 3)
+    cv2.imshow('mask', mask_on_frame)
     key = cv2.waitKey(1)
     optimizer.zero_grad()
     if key == ord('q'):
